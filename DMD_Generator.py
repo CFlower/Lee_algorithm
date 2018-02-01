@@ -8,119 +8,146 @@ import numpy as np
 import scipy.misc 
 import slmpy
 import math
+import matplotlib.pyplot as plt
 
 slmFlag = False
-
-
-# normalize image to range [0, 1]    
-def normalize_image(image):
-	img = cv2.normalize(image, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-	image8bit = np.round((2**8-1)*(img)).astype('uint8')
-	return image8bit
 
 def Lee_Mask(phaseMask,nu): #apply Lee's method to generate a DMD binary mask that corresponds to some input phasemask
 	#phaseMask is the desired phase dist phi(x,y) in the IMAGE plane. 
 	#nu is the central spatial frequency.
 	#X, Y are some meshgrid object....
 	f = (1.0/2)*(1+np.cos(2*np.pi*(X-Y)*nu-phaseMask)) #gotta carefully cast the type of phaseMask here.
-	image8bit = normalize_image(f) #this is NOT binarized.
-	return image8bit
+	#image8bit = normalize_image(f) #this is NOT binarized.
+	return f
 
-
-def iterativeBinarize(input):
+def iterativeBinarize(input, cutoff_frac):
 
 	output_array = np.zeros([ImgResY,ImgResX])
 
 	for i in range(0,ImgResY):
 		for j in range(0,ImgResX):
-			if (input[i,j]<0.5):
+			if (input[i,j]<cutoff_frac):
 				output_array[i,j] = 0.0
-				print('test')
 			else:
 				output_array[i,j]=1.0
 
 	return output_array
 
-def twoPointOutput(a,x1,y1,x2,y2): #gaussian size parameters and some coordinates. 
-	image = np.zeros([ImgResY, ImgResX])
-	mask1 = np.exp(-a*((X-x1)**2+(Y-y1)**2)) #can I do this kind of calculation in the mesh grid?
-	mask2 = np.exp(-a*((X-x2)**2+(Y-y2)**2))
-	mask = mask1+mask2
-	image = normalize_image(mask)
-	#binned = np.around(image)
-	#cv2.imshow('binned',binned)
-	#print(binned)
+def nPointOutput(size_coords_phase): #gaussian size parameters and some coordinates. 
+	#a,x1,y1,x2,y2,p1,p2
+	#size_coords_phase is a 4xN array structured as a, x, y, phase.
 
-	return image
+	Field = np.zeros([ImgResY, ImgResX])
+	numdots = size_coords_phase.shape[0]
 
+	for n in range(0,numdots):
+		a = size_coords_phase[n,0]
+		x = size_coords_phase[n,1]
+		y = size_coords_phase[n,2] #casting these as their real parts because of the dtype of the array
+		phase = size_coords_phase[n,3]
+		print(phase)
+		mask1 = np.exp(-a*((X-x)**2+(Y-y)**2)-1j*a*((X-x)**2+(Y-y)**2)) #add a gaussian amp profile
+		mask1 = np.exp(phase*1j)*mask1# np.multiply(np.exp(phase*1j),mask1) #apply the phase factor
+		Field = Field+mask1
 
-def generateConstraintMatrix(target_amplitude): #just a quick and dirty method to make constrained regions. 
-	
-	image = int(round(target_amplitude)) #should round all values?
-	return image
+	return Field #returns a complex field
 
-
-def iterative_Image_Plane():
+def alt_iterative_Image_Plane(S_C_P, cutoff):
 	#implementation of the iterative method by Wu Cheng and Tao.
-	cutoff = 40 #cutoff steps 
-	#set input amplitude as uniform as well as some phase, gonna normalize each vector for now.
-	a = twoPointOutput(.001,100,0,-100,0) #np.zeros([ImgResY, ImgResX])
-	S = iterativeBinarize(a)
+	
+	#DEFINE INPUT FIELD
+	a = np.ones([ImgResY, ImgResX]) #real valued input amplitude
+	p = np.pi*np.ones([ImgResY, ImgResX]) #real valued phase angle
 
-	p = np.ones([ImgResY, ImgResX])
-	cv2.imshow('a',a)
 
-	#set target values
-	A_target = np.zeros([ImgResY, ImgResX])
-	P_target = np.zeros([ImgResY, ImgResX])
+	#Just forget plotting input phase.... too problematic?
+	#im6 = axarr[2,0].matshow(p)
+	#axarr[2,0].set_title("Input Phase")
+	#fig.colorbar(im6, ax=axarr[2,0])
 
-	#generate constraint matrices
-	#S = np.ones([ImgResY, ImgResX])
-	S_flip = np.zeros([ImgResY, ImgResX])
-
-	#fill the inverted constraint matrix
+	#DEFINE IDENTITY
+	Ident = np.ones([ImgResY, ImgResX]) 
+	#DEFINE CONSTRAINT MATRIX
+	S = np.ones([ImgResY, ImgResX])
+	#try a half plane S
 	for i in range(0,ImgResY):
-		for j in range(0,ImgResX):
-			if(S[i,j]==1):
-				S_flip[i,j] = 0
-			else:
-				S_flip[i,j] = 1
-	cv2.imshow('constraints_flip',S_flip)
-	cv2.imshow('constraints',S)
+	 	for j in range(0,ImgResX):
+	 		if(np.sqrt((j-ImgResY/2.0)**2+(i-ImgResX/2.0)**2)<100):
+	 			S[i,j] = 0
 
+	S_flip = (Ident - S) #inversion of the constraint matrix
+
+	maskim =axarr[2,0].matshow(S, cmap=plt.cm.Greens)
+	axarr[2,0].set_title("Constriant mat")
+	fig.colorbar(maskim, ax=axarr[2,0])
+
+	#GENERATE THE TARGET FIELD
+	target_field = nPointOutput(S_C_P) #COMPLEX Field
+	A_target = np.absolute(target_field) #REAL AMPLITUDE
+	P_target =  np.angle(target_field) #REAL ANGLE
+
+	#cv2.imshow('A_Targ', A_target)
+	#cv2.imshow('Phase target (angle)',P_target)
+
+
+	#NO PLOTTING FOR NOW
+	im =axarr[0,0].matshow(A_target, cmap=plt.cm.Reds)
+	axarr[0,0].set_title("Target Amp")
+	fig.colorbar(im, ax=axarr[0,0])
+	im2 = axarr[0,1].matshow(P_target, cmap=plt.cm.Blues)
+	axarr[0,1].set_title("Target Phase")
+	fig.colorbar(im2, ax=axarr[0,1])
 
 	for n in range(0,cutoff): #the iterative mega-loop
-		#calculate the complex amplitude
-		U_calculated = np.fft.fft2(np.multiply(a,np.exp(1j*p))) #do a num fast fourier transform on the input plane
-		U_calculated = np.fft.fftshift(U_calculated) #I think this is necessary
 
-		A_calculated = np.absolute(U_calculated)
-		P_calculated = np.angle(U_calculated)
+		#calculate the complex amplitude in the IMAGE PLANE, ifft of input amplitude and current phase mask
+		U_calculated = np.fft.ifft2(np.multiply(a,np.exp(1j*p))) #COMPLEX FIELD
+		U_calculated = np.fft.ifftshift(U_calculated) #shifts k=0 to the center
+
+		A_calculated = np.absolute(U_calculated) #REAL VALUED AMPLITUDE - IMAGE PLANE
+		P_calculated = np.angle(U_calculated) #REAL VALUED PHASE ANGLE - IMAGE PLANE
+
+
+		#Split the image plane into complementary planes
 
 		#Calculate ALPHA plane values
-		A_alpha = np.multiply(A_target,S) + np.multiply(A_calculated,S_flip)
-		P_alpha = np.multiply(P_target,S) + np.multiply(P_calculated,S_flip)
-		U_alpha = np.multiply(A_alpha, np.exp(1j*P_alpha))
+		#Glues together part of the target and part of what we just calculated for both phase and amp
+		A_alpha = np.multiply(A_target,S) + np.multiply(A_calculated,S_flip)#REAL VALUED AMPLITUDE
+		P_alpha = np.multiply(P_target,S) + np.multiply(P_calculated,S_flip) #REAL VALUED PHASE ANGLE
+		U_alpha = np.multiply(A_alpha, np.exp(1j*P_alpha)) #COMPLEX FIELD
 
-		#Calculate BETA plane values
-		A_beta = np.multiply(A_target,S_flip) + np.multiply(A_calculated,S)
-		P_beta = np.multiply(P_target,S_flip) + np.multiply(P_calculated,S)
-		U_beta = np.multiply(A_beta, np.exp(1j*P_beta))
+		#Calculate BETA plane values - same procedure but invert the regions / how it is mixed
+		A_beta = np.multiply(A_target,S_flip) + np.multiply(A_calculated,S) #REAL VALUED AMPLITUDE
+		P_beta = np.multiply(P_target,S_flip) + np.multiply(P_calculated,S) #REAL VALUED PHASE
+		U_beta = np.multiply(A_beta, np.exp(1j*P_beta)) #COMPLEX FIELD
 
-		#propagate our new complex fields backwards
-		U_alpha_back = np.fft.ifft2(U_alpha)
-		U_alpha_back = np.fft.ifftshift(U_alpha_back) #shift again
-		P_alpha_back = np.angle(U_alpha_back)
+		#the output fields are defined at this point,
 
-		U_beta_back = np.fft.ifft2(U_beta)
-		U_beta_back = np.fft.ifftshift(U_beta_back) #shift again
+		#propagate our new complex fields backwards into the FOURIER PLANE
+		U_alpha_back = np.fft.fft2(U_alpha) #COMPLEX FIELD
+		U_alpha_back = np.fft.fftshift(U_alpha_back) #Shift k=0 again
+		P_alpha_back = np.angle(U_alpha_back) #REAL VALUED PHASE ANGLE
 
-		P_beta_back = np.angle(U_beta_back)
+		U_beta_back = np.fft.fft2(U_beta) #COMPLEX FIELD
+		U_beta_back = np.fft.fftshift(U_beta_back) 
+		P_beta_back = np.angle(U_beta_back) #REAL VALUED PHASE ANGLE
 
-		#generate the new phase array and iterate again
-		p = np.angle((np.exp(1j*P_alpha_back)+np.exp(1j*P_beta_back)))
+		#generate the new phase array and iterate again - adds phase contributions from both
+		p = np.angle((np.exp(1j*P_alpha_back)+np.exp(1j*P_beta_back))) #REAL VALUED PHASE ANGLE
 
-		n += 1 #increment 
+	Image_Plane = U_alpha + U_beta #COMPLEX FIELD
+	#toying with this
+	output_amp = np.absolute(Image_Plane) #REAL VALUED AMPLITUDE
+	output_phase = np.angle(Image_Plane) #REAL VALUED PHASE ANGLE
+
+	#NO PLOTTING FOR NOW
+	im3 = axarr[1,0].matshow(output_amp, cmap=plt.cm.Reds)
+	axarr[1,0].set_title("Output Amp")
+	fig.colorbar(im3, ax=axarr[1,0])
+
+	im4 = axarr[1,1].matshow(output_phase, cmap=plt.cm.Blues)
+	axarr[1,1].set_title("Output Phase")
+	fig.colorbar(im4, ax=axarr[1,1],boundaries=phasebound)
 
 	return p #return the final phase mask
 
@@ -131,8 +158,8 @@ if slmFlag == True:
     ImgResX, ImgResY = slm.getSize()
 else:
     
-    ImgResX = 792
-    ImgResY = 600
+    ImgResX = 512#792 #I think these need to be square
+    ImgResY = 512#600
 
 ImgCenterX = ImgResX/2
 ImgCenterY = ImgResY/2
@@ -146,19 +173,31 @@ X, Y = np.meshgrid(x,y)
 X = X - ImgCenterX
 Y = Y - ImgCenterY
 
+fig, axarr = plt.subplots(3,2,sharex=True) #for plotting
+phasebound = np.linspace(-np.pi,np.pi,100,endpoint=True)
+phaseticks = np.linspace(-3.5,3.5,7,endpoint=True)
+
 # generate circular window mask
-maskRadius = 0
+#maskRadius = 0
 #I think this is just if there is some sort of circular window...
-maskCircle = np.zeros((ImgResY, ImgResX), dtype = "uint8")
-cv2.circle(maskCircle, (ImgCenterX, ImgCenterY), maskRadius, 255, -1)
-maskCircle = normalize_image(maskCircle)
+#maskCircle = np.zeros((ImgResY, ImgResX), dtype = "uint8")
+#cv2.circle(maskCircle, (ImgCenterX, ImgCenterY), maskRadius, 255, -1)
+#maskCircle = normalize_image(maskCircle)
 
+#DEFINE ARRAY OF POINTS, SIZE PARAM, X, Y, PHASE FACTOR
+SCP = np.array([[.01,-50,0,np.pi]]) #,[.01,-100,0,np.pi/2],[.01,0,100,np.pi/2]
+final_phase_mask = alt_iterative_Image_Plane(SCP,100)
 
-
-#this is just for testing
-final_phase_mask = iterative_Image_Plane()
 #this is what we're going to hit now
 if slmFlag != True:
-	cv2.imshow('phase hologram',final_phase_mask)
-	cv2.waitKey()
+	im5 = axarr[2,1].matshow(final_phase_mask, cmap=plt.cm.Blues)
+	axarr[2,1].set_title("Phase Hologram")
+	fig.subplots_adjust(right=0.8)
+	cbar_ax = fig.add_axes([0.85,0.15,0.1,0.7])
+	fig.colorbar(im5, cax=cbar_ax,boundaries=phasebound)
+	fig.colorbar(im5, ax=axarr[2,1],boundaries=phasebound)
+
+	plt.show()
+	#cv2.imshow('phase hologram',final_phase_mask)
+	#cv2.waitKey()
 
