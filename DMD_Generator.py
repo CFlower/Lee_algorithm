@@ -9,6 +9,7 @@ import scipy.misc
 import slmpy
 import math
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
 
 slmFlag = False
 
@@ -68,18 +69,18 @@ def alt_iterative_Image_Plane(S_C_P, cutoff):
 	#DEFINE IDENTITY
 	Ident = np.ones([ImgResY, ImgResX]) 
 	#DEFINE CONSTRAINT MATRIX
-	S = np.ones([ImgResY, ImgResX])
+	S = np.zeros([ImgResY, ImgResX])
 	#try a half plane S
 	for i in range(0,ImgResY):
 	 	for j in range(0,ImgResX):
 	 		if(np.sqrt((j-ImgResY/2.0)**2+(i-ImgResX/2.0)**2)<100):
-	 			S[i,j] = 0
+	 			S[i,j] = 1
 
 	S_flip = (Ident - S) #inversion of the constraint matrix
 
-	maskim =axarr[2,0].matshow(S, cmap=plt.cm.Greens)
-	axarr[2,0].set_title("Constriant mat")
-	fig.colorbar(maskim, ax=axarr[2,0])
+	# maskim =axarr[2,0].matshow(S, cmap=plt.cm.Greens)
+	# axarr[2,0].set_title("Constriant mat")
+	# fig.colorbar(maskim, ax=axarr[2,0])
 
 	#GENERATE THE TARGET FIELD
 	target_field = nPointOutput(S_C_P) #COMPLEX Field
@@ -149,6 +150,24 @@ def alt_iterative_Image_Plane(S_C_P, cutoff):
 	axarr[1,1].set_title("Output Phase")
 	fig.colorbar(im4, ax=axarr[1,1],boundaries=phasebound)
 
+
+	#Now for a sanity check, we take the input amplitude and p and propagate it
+	fourier_plane = np.multiply(a,np.exp(1j*p))
+
+	check_image_plane = np.fft.ifft2(fourier_plane) #COMPLEX FIELD
+	check_image_plane = np.fft.ifftshift(check_image_plane) #shifts k=0 to the center
+
+	check_image_plane_A = np.absolute(check_image_plane) #REAL VALUED AMPLITUDE - IMAGE PLANE
+	check_image_plane_P = np.angle(check_image_plane) #REAL VALUED PHASE ANGLE - IMAGE PLANE
+
+	output_check =axarr[2,0].matshow(check_image_plane_A, cmap=plt.cm.Greens,norm=LogNorm(vmin=0.0001, vmax=1))
+	axarr[2,0].set_title("Sanity Check Amplitude")
+	fig.colorbar(output_check, ax=axarr[2,0])
+
+	output_check2 =axarr[2,1].matshow(check_image_plane_P, cmap=plt.cm.Greens)
+	axarr[2,1].set_title("Sanity Check Phase")
+	fig.colorbar(output_check2, ax=axarr[2,1])
+
 	return p #return the final phase mask
 
 if slmFlag == True:
@@ -185,17 +204,20 @@ phaseticks = np.linspace(-3.5,3.5,7,endpoint=True)
 #maskCircle = normalize_image(maskCircle)
 
 #DEFINE ARRAY OF POINTS, SIZE PARAM, X, Y, PHASE FACTOR
-SCP = np.array([[.01,-50,0,np.pi]]) #,[.01,-100,0,np.pi/2],[.01,0,100,np.pi/2]
+SCP = np.array([[.01,-100,0,np.pi],[.01,100,0,np.pi/2.0]]) #,[.01,-100,0,np.pi/2],[.01,0,100,np.pi/2]
 final_phase_mask = alt_iterative_Image_Plane(SCP,100)
 
 #this is what we're going to hit now
 if slmFlag != True:
-	im5 = axarr[2,1].matshow(final_phase_mask, cmap=plt.cm.Blues)
-	axarr[2,1].set_title("Phase Hologram")
-	fig.subplots_adjust(right=0.8)
-	cbar_ax = fig.add_axes([0.85,0.15,0.1,0.7])
-	fig.colorbar(im5, cax=cbar_ax,boundaries=phasebound)
-	fig.colorbar(im5, ax=axarr[2,1],boundaries=phasebound)
+	#im5 = axarr[2,1].matshow(final_phase_mask, cmap=plt.cm.Blues)
+	#axarr[2,1].set_title("Phase Hologram")
+	fig.subplots_adjust(right=.6)
+	#fig.colorbar(im5, ax=axarr[2,1])
+
+	new_ax = fig.add_axes([.55,0.3,0.4,0.4])
+	new_ax.set_title("Phase Hologram")
+	phaseholo = new_ax.matshow(final_phase_mask, cmap=plt.cm.Blues)
+	fig.colorbar(phaseholo, cax=new_ax)
 
 	plt.show()
 	#cv2.imshow('phase hologram',final_phase_mask)
