@@ -57,10 +57,26 @@ def alt_iterative_Image_Plane(S_C_P, cutoff):
 	#implementation of the iterative method by Wu Cheng and Tao.
 	
 	#DEFINE INPUT FIELD
-	a = np.ones([ImgResY, ImgResX]) #real valued input amplitude
-	p = np.pi*np.ones([ImgResY, ImgResX]) #real valued phase angle
+	gaussian = True
+
+	if (gaussian == True):
+		input_U = np.exp(-.000001*((X)**2+(Y)**2)-1j*np.pi*.000001*((X)**2+(Y)**2))
+		a = np.absolute(input_U)
+		p = np.angle(input_U)
+	else:
+		a = np.ones([ImgResY, ImgResX])*1.0/2.0
+		p = np.pi*np.ones([ImgResY, ImgResX]) #real valued phase angle
 
 
+	im7 =axarr[0,0].matshow(a, cmap=plt.cm.Reds)
+	axarr[0,0].set_title("Input Amp")
+	fig.colorbar(im7, ax=axarr[0,0])
+	im8 = axarr[0,1].matshow(p, cmap=plt.cm.Blues)
+	axarr[0,1].set_title("Input Phase")
+	fig.colorbar(im8, ax=axarr[0,1])
+
+	
+	#Gaussian Input
 	#Just forget plotting input phase.... too problematic?
 	#im6 = axarr[2,0].matshow(p)
 	#axarr[2,0].set_title("Input Phase")
@@ -73,31 +89,24 @@ def alt_iterative_Image_Plane(S_C_P, cutoff):
 	#try a half plane S
 	for i in range(0,ImgResY):
 	 	for j in range(0,ImgResX):
-	 		if(np.sqrt((j-ImgResY/2.0)**2+(i-ImgResX/2.0)**2)<100):
+	 		if(j<ImgResX/2.0): #np.sqrt((j-ImgResY/2.0)**2+(i-ImgResX/2.0)**2)<100
 	 			S[i,j] = 1
 
 	S_flip = (Ident - S) #inversion of the constraint matrix
-
-	# maskim =axarr[2,0].matshow(S, cmap=plt.cm.Greens)
-	# axarr[2,0].set_title("Constriant mat")
-	# fig.colorbar(maskim, ax=axarr[2,0])
 
 	#GENERATE THE TARGET FIELD
 	target_field = nPointOutput(S_C_P) #COMPLEX Field
 	A_target = np.absolute(target_field) #REAL AMPLITUDE
 	P_target =  np.angle(target_field) #REAL ANGLE
 
-	#cv2.imshow('A_Targ', A_target)
-	#cv2.imshow('Phase target (angle)',P_target)
-
 
 	#NO PLOTTING FOR NOW
-	im =axarr[0,0].matshow(A_target, cmap=plt.cm.Reds)
-	axarr[0,0].set_title("Target Amp")
-	fig.colorbar(im, ax=axarr[0,0])
-	im2 = axarr[0,1].matshow(P_target, cmap=plt.cm.Blues)
-	axarr[0,1].set_title("Target Phase")
-	fig.colorbar(im2, ax=axarr[0,1])
+	im =axarr[1,0].matshow(A_target, cmap=plt.cm.Reds)
+	axarr[1,0].set_title("Target Amp")
+	fig.colorbar(im, ax=axarr[1,0])
+	im2 = axarr[1,1].matshow(P_target, cmap=plt.cm.Blues)
+	axarr[1,1].set_title("Target Phase")
+	fig.colorbar(im2, ax=axarr[1,1])
 
 	for n in range(0,cutoff): #the iterative mega-loop
 
@@ -107,7 +116,6 @@ def alt_iterative_Image_Plane(S_C_P, cutoff):
 
 		A_calculated = np.absolute(U_calculated) #REAL VALUED AMPLITUDE - IMAGE PLANE
 		P_calculated = np.angle(U_calculated) #REAL VALUED PHASE ANGLE - IMAGE PLANE
-
 
 		#Split the image plane into complementary planes
 
@@ -142,13 +150,13 @@ def alt_iterative_Image_Plane(S_C_P, cutoff):
 	output_phase = np.angle(Image_Plane) #REAL VALUED PHASE ANGLE
 
 	#NO PLOTTING FOR NOW
-	im3 = axarr[1,0].matshow(output_amp, cmap=plt.cm.Reds)
-	axarr[1,0].set_title("Output Amp")
-	fig.colorbar(im3, ax=axarr[1,0])
+	im3 = axarr[2,0].matshow(output_amp, cmap=plt.cm.Reds)
+	axarr[2,0].set_title("Output Amp")
+	fig.colorbar(im3, ax=axarr[2,0])
 
-	im4 = axarr[1,1].matshow(output_phase, cmap=plt.cm.Blues)
-	axarr[1,1].set_title("Output Phase")
-	fig.colorbar(im4, ax=axarr[1,1],boundaries=phasebound)
+	im4 = axarr[2,1].matshow(output_phase, cmap=plt.cm.Blues)
+	axarr[2,1].set_title("Output Phase")
+	fig.colorbar(im4, ax=axarr[2,1],boundaries=phasebound)
 
 
 	#Now for a sanity check, we take the input amplitude and p and propagate it
@@ -160,13 +168,13 @@ def alt_iterative_Image_Plane(S_C_P, cutoff):
 	check_image_plane_A = np.absolute(check_image_plane) #REAL VALUED AMPLITUDE - IMAGE PLANE
 	check_image_plane_P = np.angle(check_image_plane) #REAL VALUED PHASE ANGLE - IMAGE PLANE
 
-	output_check =axarr[2,0].matshow(check_image_plane_A, cmap=plt.cm.Greens,norm=LogNorm(vmin=0.0001, vmax=1))
-	axarr[2,0].set_title("Sanity Check Amplitude")
-	fig.colorbar(output_check, ax=axarr[2,0])
+	output_check =axarr[3,0].matshow(check_image_plane_A, cmap=plt.cm.Greens,norm=LogNorm(vmin=0.0001, vmax=1))
+	axarr[3,0].set_title("Sanity Check Amplitude")
+	fig.colorbar(output_check, ax=axarr[3,0])
 
-	output_check2 =axarr[2,1].matshow(check_image_plane_P, cmap=plt.cm.Greens)
-	axarr[2,1].set_title("Sanity Check Phase")
-	fig.colorbar(output_check2, ax=axarr[2,1])
+	output_check2 =axarr[3,1].matshow(check_image_plane_P, cmap=plt.cm.Greens)
+	axarr[3,1].set_title("Sanity Check Phase")
+	fig.colorbar(output_check2, ax=axarr[3,1])
 
 	return p #return the final phase mask
 
@@ -192,20 +200,15 @@ X, Y = np.meshgrid(x,y)
 X = X - ImgCenterX
 Y = Y - ImgCenterY
 
-fig, axarr = plt.subplots(3,2,sharex=True) #for plotting
+fig, axarr = plt.subplots(4,2,sharex=True) #for plotting
 phasebound = np.linspace(-np.pi,np.pi,100,endpoint=True)
 phaseticks = np.linspace(-3.5,3.5,7,endpoint=True)
 
-# generate circular window mask
-#maskRadius = 0
-#I think this is just if there is some sort of circular window...
-#maskCircle = np.zeros((ImgResY, ImgResX), dtype = "uint8")
-#cv2.circle(maskCircle, (ImgCenterX, ImgCenterY), maskRadius, 255, -1)
-#maskCircle = normalize_image(maskCircle)
-
+################################ USER INPUTS ########################################################
 #DEFINE ARRAY OF POINTS, SIZE PARAM, X, Y, PHASE FACTOR
-SCP = np.array([[.01,-100,0,np.pi],[.01,100,0,np.pi/2.0]]) #,[.01,-100,0,np.pi/2],[.01,0,100,np.pi/2]
-final_phase_mask = alt_iterative_Image_Plane(SCP,100)
+SCP = np.array([[.01,-100,0,np.pi/2.0],[.01,0,-50,0],[.01,100,0,np.pi]]) #,[.01,-100,0,np.pi/2],[.01,0,100,np.pi/2]
+final_phase_mask = alt_iterative_Image_Plane(SCP,2000)
+#####################################################################################################
 
 #this is what we're going to hit now
 if slmFlag != True:
@@ -217,7 +220,7 @@ if slmFlag != True:
 	new_ax = fig.add_axes([.55,0.3,0.4,0.4])
 	new_ax.set_title("Phase Hologram")
 	phaseholo = new_ax.matshow(final_phase_mask, cmap=plt.cm.Blues)
-	fig.colorbar(phaseholo, cax=new_ax)
+	fig.colorbar(phaseholo, cax=new_ax, boundaries=[-2*np.pi,2*np.pi])
 
 	plt.show()
 	#cv2.imshow('phase hologram',final_phase_mask)
